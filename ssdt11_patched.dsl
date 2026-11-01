@@ -14,7 +14,12 @@
  * forwards the call to \_SB.PCI0.LPC0.EC0_.SNTM.
  *
  * To recompile manually with ACPICA iasl:
- *     iasl -tc ssdt11_patched.dsl
+ *     iasl -tc -f ssdt11_patched.dsl
+ *
+ * Build note: this table intentionally defines placeholder Device() nodes at
+ * the (nonexistent) Intel ACPI path. iasl >= 2023 reports error 6141 ("Device
+ * object requires a _HID or _ADR") for them; that is expected for this bridge.
+ * verify-aml.sh builds with -f and rejects any error other than 6141.
  */
 DefinitionBlock ("ssdt11_patched.aml", "SSDT", 2, "LENOVO", "FixSNTM ", 0x00000001)
 {

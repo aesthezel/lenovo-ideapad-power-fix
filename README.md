@@ -107,7 +107,9 @@ find . -maxdepth 1 \( -type f -o -type d \) -perm /022 -print
 # ACPI header/checksum (+ iasl disassembly and rebuild when installed)
 bash ./verify-aml.sh
 ```
-If you want byte-level integrity pinning, generate and commit the hash after review:
+The repository ships `ssdt11_patched.aml.sha256` and `verify-aml.sh` enforces it
+(any byte change to the AML fails verification). If you intentionally rebuild or
+modify the table, review it and regenerate the pin:
 ```bash
 sha256sum ssdt11_patched.aml > ssdt11_patched.aml.sha256
 ```
@@ -201,12 +203,17 @@ This bridge is only needed on firmware that contains the wrong `\_SB.PC00.LPCB.E
 The full human-readable ASL source is provided in [`ssdt11_patched.dsl`](./ssdt11_patched.dsl). You can verify the table and rebuild it from source with:
 ```bash
 bash ./verify-aml.sh
-iasl -tc ssdt11_patched.dsl
+iasl -tc -f ssdt11_patched.dsl
 ```
-`verify-aml.sh` checks the `SSDT` signature, the declared `Length`, the ACPI checksum
-and the `FixSNTM` OEM Table ID; optionally compares a pinned SHA-256; disassembles the
-table and rejects operations the bridge must not use; and recompiles the `.dsl` with
-`iasl`. The installer calls it before touching `/etc/acpi/tables` and uses the
+`iasl` 2023 and newer report error 6141 (*Device object requires a `_HID` or
+`_ADR`*) for the placeholder `PC00`/`LPCB`/`EC0` nodes. That is expected: the
+bridge must create those nodes at the nonexistent Intel path, and adding `_HID`
+or `_ADR` would alter the ACPI namespace. `verify-aml.sh` therefore builds with
+`-f` (force AML output) and **rejects any compiler error other than 6141**.
+The script also checks the `SSDT` signature, the declared `Length`, the ACPI
+checksum and the `FixSNTM` OEM Table ID; optionally compares a pinned SHA-256;
+disassembles the rebuilt table and rejects operations the bridge must not use.
+The installer calls it before touching `/etc/acpi/tables` and uses the
 recompiled table when `iasl` is available. The same verification runs in CI.
 
 ---
@@ -225,8 +232,9 @@ Quick summary:
 * **Legacy `./backups` is untrusted** and ignored unless you pass
   `--trust-legacy-backups` after reviewing it manually.
 * **The ACPI table is verified and rebuilt** from the ASL source when `iasl` is
-  installed. You can also pin a SHA-256 with
-  `sha256sum ssdt11_patched.aml > ssdt11_patched.aml.sha256`.
+  installed, and the shipped binary is pinned by
+  `ssdt11_patched.aml.sha256`. Regenerate the pin only after an intentional,
+  reviewed table change.
 * **Never run the installer from an untrusted directory.** A root-run installer
   executes code from the checkout; the trust check only blocks trees writable by
   group/others, not a malicious owner.

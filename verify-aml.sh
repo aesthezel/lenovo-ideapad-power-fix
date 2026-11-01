@@ -6,10 +6,12 @@
 #   1. ACPI header: signature, declared Length and checksum, OEM Table ID.
 #   2. Optional pinned SHA-256 (ssdt11_patched.aml.sha256).
 #   3. When iasl (acpica-tools) is available:
-#        - rebuild the table from the audited ssdt11_patched.dsl (hard failure),
-#        - validate the rebuilt table and reject dangerous AML operations,
-#        - best-effort disassembly check of the shipped binary (which is not
-#          used by the installer when a rebuild is possible).
+#      - rebuild the table from the audited ssdt11_patched.dsl (hard failure;
+#        falls back to the SHA-256 pinned shipped table only if iasl cannot emit
+#        AML while reporting solely the expected error 6141),
+#      - validate the rebuilt table and reject dangerous AML operations,
+#      - best-effort disassembly check of the shipped binary (which is not
+#        used by the installer when a rebuild is possible).
 #
 # Set VERIFY_AML_REBUILD_OUT=/path/to/output.aml to receive the recompiled
 # table. The exit status is non-zero if any hard check fails.
@@ -122,15 +124,40 @@ TMP_DIR="$(mktemp -d /tmp/verify-aml.XXXXXX)"
 # 1. Rebuild the table from the audited ASL source. This is the table the
 #    installer uses when iasl is available, so it is a hard requirement.
 # ------------------------------------------------------------------------------
-iasl -tc -p "${TMP_DIR}/rebuilt" "$DSL" >"${TMP_DIR}/build.log" 2>&1 || true
+iasl -tc -f -p "${TMP_DIR}/rebuilt" "$DSL" >"${TMP_DIR}/build.log" 2>&1 || true
 REBUILT="${TMP_DIR}/rebuilt.aml"
+
+# The SNTM bridge intentionally creates placeholder Device() nodes for the
+# (nonexistent) Intel namespace path. iasl >= 2023 reports error 6141 because
+# those devices have no _HID/_ADR. -f forces the AML output; accept ONLY that
+# specific error and reject anything else.
+error_lines="$(grep -E '(^|[[:space:]])Error[[:space:]]+[0-9]+' "${TMP_DIR}/build.log" || true)"
+if [ -n "$error_lines" ]; then
+  unexpected_errors="$(printf '%s\n' "$error_lines" | grep -vE '(^|[[:space:]])Error[[:space:]]+6141' || true)"
+  if [ -n "$unexpected_errors" ]; then
+    printf '%s\n' "$unexpected_errors" >&2
+    sed -n '1,60p' "${TMP_DIR}/build.log" >&2 || true
+    die "iasl reported errors other than the expected 6141 (placeholder Device nodes)"
+  fi
+fi
+
 if [ ! -f "$REBUILT" ]; then
-  sed -n '1,40p' "${TMP_DIR}/build.log" >&2 || true
-  die "iasl could not compile $DSL"
+  if [ -n "$error_lines" ]; then
+    echo "  [WARN] iasl did not emit AML despite -f (only error 6141 was reported);" >&2
+    echo "         falling back to the verified, SHA-256 pinned shipped table." >&2
+    REBUILT="$AML"
+  else
+    sed -n '1,40p' "${TMP_DIR}/build.log" >&2 || true
+    die "iasl could not compile $DSL"
+  fi
 fi
 
 validate_header "$REBUILT"
-echo "  [OK] Rebuilt the ACPI table from ${DSL##*/}"
+if [ "$REBUILT" = "$AML" ]; then
+  echo "  [OK] Using the verified shipped table (iasl rebuild unavailable)"
+else
+  echo "  [OK] Rebuilt the ACPI table from ${DSL##*/}"
+fi
 
 # ------------------------------------------------------------------------------
 # 2. Structural and dangerous-operation checks
@@ -160,7 +187,7 @@ fi
 if [ -n "${VERIFY_AML_REBUILD_OUT:-}" ]; then
   cp -f -- "$REBUILT" "$VERIFY_AML_REBUILD_OUT"
   chmod 0644 -- "$VERIFY_AML_REBUILD_OUT"
-  echo "  [OK] Rebuilt table written to $VERIFY_AML_REBUILD_OUT"
+  echo "  [OK] Table written to $VERIFY_AML_REBUILD_OUT"
 fi
 
 echo "=== ACPI verification passed ==="

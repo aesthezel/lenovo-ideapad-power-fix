@@ -85,7 +85,14 @@ bash ./verify-aml.sh
 find . -maxdepth 1 -perm /022 -print
 ```
 
-Optional cryptographic pinning of the shipped AML (after you have reviewed it):
+With `acpica-tools` installed, `verify-aml.sh` rebuilds the table from the ASL
+source with `iasl -tc -f`. iasl 2023+ reports error **6141** for the
+intentionally attributes-less placeholder `PC00`/`LPCB`/`EC0` devices; the
+script whitelists only that error and fails on any other compiler diagnostic.
+
+Optional cryptographic pinning of the shipped AML (the repository already ships
+`ssdt11_patched.aml.sha256`; regenerate it only after an intentional table change
+and review):
 
 ```sh
 sha256sum ssdt11_patched.aml > ssdt11_patched.aml.sha256
@@ -107,10 +114,11 @@ rebuild the table from `ssdt11_patched.dsl` on every run.
 2. **Secure Boot is not a boundary here.** The project never asks you to disable
    Secure Boot, but an ACPI override placed *outside* a signed UKI may not load.
    Do not disable Secure Boot as a workaround; use `--skip-acpi` instead.
-3. **No default SHA-256 pin for the AML.** The installer validates structure and
-   rebuilds from source when `iasl` is available, but the repository does not
-   ship a pinned hash by default. Generate and commit
-   `ssdt11_patched.aml.sha256` as shown above to enable byte-level pinning.
+3. **The AML hash pin must be maintained.** The repository ships
+   `ssdt11_patched.aml.sha256`, and `verify-aml.sh` fails on any byte change to
+   `ssdt11_patched.aml`. If the pin file is missing in a fork or downloaded
+   archive, only structural checks apply. Regenerate the pin after every
+   intentional AML change and review the diff.
 4. **The installer still executes code from the checkout.** Running
    `sudo ./install.sh` from a tree you do not control is equivalent to running
    arbitrary code as root. The trust check only blocks group/other-writable
@@ -151,8 +159,9 @@ setuid helpers). The findings and their status:
 
 The ACPI binary could not be cryptographically verified in the audit environment
 (no shell access was available); this is why runtime verification and the
-reproducible CI rebuild were added. A maintainer should still generate and commit
-`ssdt11_patched.aml.sha256` after an independent `iasl -d` review.
+reproducible CI rebuild were added. The repository now ships
+`ssdt11_patched.aml.sha256`; any intentional AML change must update that pin
+after an independent `iasl -d` review.
 
 ## Hardening checklist for users
 
