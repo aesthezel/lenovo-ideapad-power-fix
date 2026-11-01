@@ -1,0 +1,12 @@
+[Unit]
+Description=Enable Lenovo Battery Conservation Mode (Long_Life ~80% Charge Limit)
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/env bash -c 'for f in /sys/class/power_supply/BAT*/charge_types; do [ -w "$f" ] && echo Long_Life > "$f" && exit 0; done; for f in /sys/bus/platform/devices/VPC2004:*/conservation_mode; do [ -w "$f" ] && echo 1 > "$f" && exit 0; done; exit 0'
+ExecStop=/usr/bin/env bash -c 'for f in /sys/class/power_supply/BAT*/charge_types; do [ -w "$f" ] && echo Standard > "$f" && exit 0; done; for f in /sys/bus/platform/devices/VPC2004:*/conservation_mode; do [ -w "$f" ] && echo 0 > "$f" && exit 0; done; exit 0'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

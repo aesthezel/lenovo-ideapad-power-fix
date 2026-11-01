@@ -1,0 +1,6 @@
+# Normalize text files to LF for cross-platform reproducibility
+* text=auto eol=lf
+
+# Binary ACPI tables and initramfs archives
+*.aml binary
+*.cpio binary

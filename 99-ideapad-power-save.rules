@@ -1,0 +1,17 @@
+# ==============================================================================
+# Power Saving & S0i3 Modern Standby Udev Rules for Lenovo IdeaPad AMD Laptops
+# ==============================================================================
+
+# 1. Allow the AMD Audio Coprocessor (1022:15e2) and Genesys Logic SD Card
+#    Reader (17a0:975*) to enter runtime D3hot/D3cold power states
+ACTION=="add|change", SUBSYSTEM=="pci", ATTR{vendor}=="0x1022", ATTR{device}=="0x15e2", ATTR{power/control}="auto"
+ACTION=="add|change", SUBSYSTEM=="pci", ATTR{vendor}=="0x17a0", ATTR{device}=="0x975*", ATTR{power/control}="auto"
+
+# 2. Prevent wireless USB mouse receivers (e.g. Logitech Nano/Unifying/Bolt)
+#    from waking the laptop on slight mouse movement while suspended
+ACTION=="add|change", SUBSYSTEM=="usb", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c534", ATTR{power/wakeup}="disabled"
+ACTION=="add|change", SUBSYSTEM=="usb", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c52b", ATTR{power/wakeup}="disabled"
+ACTION=="add|change", SUBSYSTEM=="usb", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c548", ATTR{power/wakeup}="disabled"
+
+# 3. Disable spurious PCIe wakeup on the SD Card Reader GPP Root Port (0000:00:02.1)
+ACTION=="add|change", SUBSYSTEM=="pci", KERNEL=="0000:00:02.1", ATTR{power/wakeup}="disabled"

@@ -1,0 +1,10 @@
+# Local system backups (may contain machine-specific UUIDs or configs)
+backups/
+*.bak
+*.orig.aml
+*.was_enabled
+
+# OS / Editor artifacts
+.DS_Store
+*~
+*.swp
