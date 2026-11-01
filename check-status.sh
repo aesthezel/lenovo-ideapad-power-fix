@@ -7,9 +7,38 @@
 # battery conservation mode, and AMD PMC S0i3 hardware sleep residency.
 # ==============================================================================
 
+set -uo pipefail
+
+# Fixed PATH: this script is commonly run through sudo.
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 echo "======================================================================"
 echo " LENOVO IDEAPAD AMD - POWER, SUSPEND (S0i3) & KEYBOARD STATUS CHECK"
 echo "======================================================================"
+echo ""
+echo " NOTE: this report may contain machine-specific identifiers (kernel UUIDs,"
+echo "       firmware versions, device paths). Redact them before sharing it."
+echo ""
+
+echo "0. SECURITY / BACKUP STATE:"
+SEC_BACKUP_DIR="/var/backups/lenovo-ideapad-power-fix"
+if [ -d "$SEC_BACKUP_DIR" ]; then
+  echo "   - Backup directory:     $SEC_BACKUP_DIR"
+  echo "   - Permissions/owner:    $(stat -c '%a %U:%G' -- "$SEC_BACKUP_DIR" 2>/dev/null || echo 'N/A')"
+  if [ -f "$SEC_BACKUP_DIR/manifest.sha256" ]; then
+    echo "   - Backup manifest:      present"
+  else
+    echo "   - Backup manifest:      MISSING (uninstall will refuse unverified backups)"
+  fi
+else
+  echo "   - Backup directory:     not present ($SEC_BACKUP_DIR)"
+fi
+if [ -d "$SCRIPT_DIR/backups" ] && [ -n "$(ls -A -- "$SCRIPT_DIR/backups" 2>/dev/null || true)" ]; then
+  echo "   - WARNING: legacy ./backups present in the repository (untrusted; not used automatically)"
+fi
 
 echo ""
 echo "1. RUNNING KERNEL PARAMETERS (/proc/cmdline):"

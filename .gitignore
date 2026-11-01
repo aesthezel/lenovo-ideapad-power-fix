@@ -1,4 +1,6 @@
-# Local system backups (may contain machine-specific UUIDs or configs)
+# Legacy in-repository backups. The installer now writes root-only backups to
+# /var/backups/lenovo-ideapad-power-fix, so these patterns are only kept to make
+# sure old, untrusted backup files are never committed by accident.
 backups/
 *.bak
 *.orig.aml

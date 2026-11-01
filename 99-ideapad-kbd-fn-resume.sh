@@ -13,16 +13,34 @@
 #    - Cleanly reconnects the PS/2 keyboard driver (atkbd on i8042/serio*)
 #      because Linux's i8042_pm_resume() skips hardware reset during s2idle.
 #    - Restores the saved FnLock state and LED indicator.
+#
+# SECURITY NOTE: this hook runs as root. It only reads/writes fixed sysfs paths
+# and validates the FnLock value (0 or 1) before writing it back. The direct
+# PCI config-space accesses in the "pre" branch are intentional (they put an
+# unbound ACP device into D3hot); see SECURITY.md for the rationale.
 # ==============================================================================
+
+# Fixed PATH: systemd-sleep runs this as root, never trust the caller's PATH.
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+umask 077
 
 STATE_FILE="/run/ideapad_fn_lock.state"
 
 case "$1" in
   pre)
+    # Refuse to write through a pre-existing symlink.
+    if [ -L "$STATE_FILE" ]; then
+      exit 0
+    fi
+
     # 1. Save current FnLock state across all matching VPC2004 platform devices
     for fn_sysfs in /sys/bus/platform/devices/VPC2004:*/fn_lock; do
       if [ -r "$fn_sysfs" ]; then
-        cat "$fn_sysfs" > "$STATE_FILE" 2>/dev/null || true
+        state="$(cat -- "$fn_sysfs" 2>/dev/null || true)"
+        case "$state" in
+          0|1) printf '%s\n' "$state" > "$STATE_FILE" 2>/dev/null || true ;;
+        esac
         break
       fi
     done
@@ -74,13 +92,18 @@ for dev_dir in glob.glob("/sys/bus/pci/devices/*"):
       echo -n reconnect > "/sys/devices/platform/i8042/serio0/drvctl" 2>/dev/null || true
     fi
 
-    # Restore saved FnLock state on VPC2004:*
-    if [ -f "$STATE_FILE" ]; then
-      for fn_sysfs in /sys/bus/platform/devices/VPC2004:*/fn_lock; do
-        if [ -w "$fn_sysfs" ]; then
-          cat "$STATE_FILE" > "$fn_sysfs" 2>/dev/null || true
-        fi
-      done
+    # Restore saved FnLock state on VPC2004:* (validated value only)
+    if [ -f "$STATE_FILE" ] && [ ! -L "$STATE_FILE" ]; then
+      state="$(cat -- "$STATE_FILE" 2>/dev/null || true)"
+      case "$state" in
+        0|1)
+          for fn_sysfs in /sys/bus/platform/devices/VPC2004:*/fn_lock; do
+            if [ -w "$fn_sysfs" ]; then
+              printf '%s\n' "$state" > "$fn_sysfs" 2>/dev/null || true
+            fi
+          done
+          ;;
+      esac
     fi
     ;;
 esac
